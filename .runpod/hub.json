@@ -1,22 +1,21 @@
 {
-  "title": "Worker Template",
-  "description": "A starting point for creating your own custom serverless worker. It provides a basic structure and configuration that you can build upon.",
+  "title": "BiRefNet Background Removal",
+  "description": "High-performance background removal service using BiRefNet model. Automatically removes backgrounds from images with advanced AI technology, supporting JPEG, PNG, BMP, TIFF, and WEBP formats. Memory-optimized with automatic image resizing and comprehensive error handling.",
   "type": "serverless",
-  "category": "language",
-  "iconUrl": "https://dummyimage.com/100x100/5733ff/fff&text=SW",
+  "category": "image",
+  "iconUrl": "https://dummyimage.com/100x100/4CAF50/fff&text=BiRefNet",
   "config": {
     "runsOn": "GPU",
-    "containerDiskInGb": 5,
-    "gpuIds": "ADA_24",
+    "containerDiskInGb": 6,
     "gpuCount": 1,
+    "gpuIds": "AMPERE_16,AMPERE_24,ADA_24",
     "allowedCudaVersions": [
+      "12.9",
+      "12.8",
       "12.7",
       "12.6",
       "12.5",
-      "12.4",
-      "12.3",
-      "12.2",
-      "12.1"
+      "12.4"
     ]
   }
 }
