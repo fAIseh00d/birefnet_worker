@@ -5,8 +5,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN python -m pip install -r requirements.txt --no-cache-dir && pip cache purge
 # Pre-download and cache the model
-RUN python -c "from rembg import new_session; session = new_session('birefnet-general-lite')"
+RUN python -c "from transformers import AutoModelForImageSegmentation; model = AutoModelForImageSegmentation.from_pretrained('ZhengPeng7/BiRefNet', trust_remote_code=True, cache_dir='models/birefnet')"
 
+COPY modules/ ./modules/
 COPY handler.py schemas.py test_input.json ./
 
 ARG CUDA_LIB_ROOT=/usr/local/lib/python3.11/dist-packages/nvidia/

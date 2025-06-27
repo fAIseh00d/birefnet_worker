@@ -1,54 +1,27 @@
 """BiRefNet Background Removal Handler with proper logging."""
 
 import runpod
-from runpod import RunpodLogger
+from runpod.serverless.modules.rp_logger import RunPodLogger
 from runpod.serverless.utils.rp_validator import validate
 
-from schemas import INPUT_SCHEMA
-from rembg import remove, new_session
-from PIL import Image
 import base64
 import io
-import os
 import gc
 from contextlib import contextmanager
+from PIL import Image
+
+from schemas import INPUT_SCHEMA
+from modules.birefnet import BirefnetHandler
+from modules.utils import tform_to_pil, tform_to_tensor, device
 
 # Initialize RunPod logger for structured logging
-log = RunpodLogger()
+log = RunPodLogger()
 
 # If your handler runs inference on a model, load the model here.
 # You will want models to be loaded into memory before starting serverless.
 log.info("Loading BiRefNet model session...")
-session = new_session("birefnet-general-lite")
+birefnet_handler = BirefnetHandler()
 log.info("BiRefNet model session loaded successfully")
-
-def preprocess_image(image_pil, max_size=1024):
-    """Preprocess image to ensure it's within memory limits."""
-    # Get original dimensions
-    width, height = image_pil.size
-    original_size = (width, height)
-    was_resized = False
-    
-    log.debug(f"Original image dimensions: {width}x{height}")
-    
-    # Calculate if resizing is needed
-    if max(width, height) > max_size:
-        # Calculate new dimensions maintaining aspect ratio
-        if width > height:
-            new_width = max_size
-            new_height = int((height * max_size) / width)
-        else:
-            new_height = max_size
-            new_width = int((width * max_size) / height)
-        
-        # Resize image
-        resized_image = image_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
-        log.info(f"Resized image from {width}x{height} to {new_width}x{new_height} for memory optimization")
-        was_resized = True
-        return resized_image, original_size, was_resized
-    
-    log.debug("No resizing needed, image within memory limits")
-    return image_pil, original_size, was_resized
 
 @contextmanager
 def image_processing_scope():
@@ -85,6 +58,10 @@ def load_and_validate_image(image_string):
         image_pil.verify()  # Additional verification
         # Reopen image since verify() closes it
         image_pil = Image.open(io.BytesIO(image_bytes))
+        # Convert to RGB if not already
+        if image_pil.mode != 'RGB':
+            image_pil = image_pil.convert('RGB')
+            log.debug(f"Image converted to RGB mode")
         log.info(f"Image loaded and validated successfully - Format: {image_pil.format}, Size: {image_pil.size}")
     except Exception as e:
         log.error(f"Image validation failed: {str(e)}")
@@ -110,34 +87,16 @@ def process_birefnet_image(processed_image):
     """Isolated scope for BiRefNet processing."""
     log.info("Starting BiRefNet background removal processing")
     with image_processing_scope():
-        result = remove(processed_image, session=session)
+        processed_image = tform_to_tensor(processed_image).to(device)
+        result = birefnet_handler.process_imgs([processed_image])[0]
+        result = tform_to_pil(result)
         log.info("BiRefNet background removal completed successfully")
         return result
-
-def resize_alpha_and_composite(image_rembg, original_image, original_size):
-    """Isolated scope for alpha resizing and compositing."""
-    log.info(f"Starting alpha channel processing for original size: {original_size}")
-    
-    # Extract alpha channel from the processed result
-    alpha_channel = image_rembg.split()[-1]
-    
-    # Resize alpha channel back to original size
-    alpha_resized = alpha_channel.resize(original_size, Image.Resampling.LANCZOS)
-    
-    # Convert original image to RGBA if it isn't already
-    if original_image.mode != 'RGBA':
-        original_image = original_image.convert('RGBA')
-    
-    # Apply the resized alpha channel to the original image
-    original_image.putalpha(alpha_resized)
-    
-    log.info(f"Applied resized alpha channel back to original {original_size} image")
-    return original_image
 
 def handler(job):
     """Handler function that will be used to process jobs."""
     job_id = job.get("id", "unknown")
-    log.info(f"Starting BiRefNet background removal job", extra={"job_id": job_id})
+    log.info(f"Starting BiRefNet background removal job - Job ID: {job_id}")
     
     try:
         validate(job, INPUT_SCHEMA)
@@ -152,59 +111,24 @@ def handler(job):
         image_pil = load_and_validate_image(image_string)
         
         # Main processing in isolated scopes
-        def process_image():
-            log.info("Starting main image processing pipeline")
-            
-            # Keep original image for final compositing
-            original_image = image_pil.copy()
-            
-            # Preprocess image to prevent memory issues
-            processed_image, original_size, was_resized = preprocess_image(image_pil)
-
-            # Process through BiRefNet in isolated scope
-            image_rembg = process_birefnet_image(processed_image)
-            
-            # Handle resizing in isolated scope
-            if was_resized:
-                log.info("Applying alpha channel processing due to image resizing")
-                final_image = resize_alpha_and_composite(image_rembg, original_image, original_size)
-            else:
-                log.info("Using BiRefNet output directly, no resizing was performed")
-                final_image = image_rembg
-            
-            return final_image
-        
-        # Execute processing in isolated scope
-        final_image = process_image()
+        final_image = process_birefnet_image(image_pil)
         
         # Convert final image to base64
         image_base64 = save_image_to_base64(final_image)
         
-        log.info(f"Job completed successfully for {file_name}", extra={
-            "job_id": job_id,
-            "filename": file_name,
-            "success": True
-        })
+        log.info(f"Job completed successfully for {file_name} - Job ID: {job_id}")
         
         return {"filename": file_name, "image_b64": image_base64}
     
     except ValueError as ve:
         # Handle validation errors specifically
-        log.error(f"Validation error in job {job_id}: {str(ve)}", extra={
-            "job_id": job_id,
-            "error_type": "ValidationError",
-            "error_message": str(ve)
-        })
+        log.error(f"Validation error in job {job_id}: {str(ve)}")
         gc.collect()
         return {"error": f"Validation Error: {str(ve)}"}
     
     except Exception as e:
         # Handle unexpected errors
-        log.error(f"Unexpected error in job {job_id}: {str(e)}", extra={
-            "job_id": job_id,
-            "error_type": type(e).__name__,
-            "error_message": str(e)
-        })
+        log.error(f"Unexpected error in job {job_id} ({type(e).__name__}): {str(e)}")
         # Force garbage collection on error
         gc.collect()
         raise e
