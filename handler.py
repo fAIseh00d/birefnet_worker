@@ -13,7 +13,6 @@ from PIL import Image
 from schemas import INPUT_SCHEMA
 from modules.birefnet import BirefnetHandler
 from modules.utils import tform_to_pil, tform_to_tensor, device
-
 # Initialize RunPod logger for structured logging
 log = RunPodLogger()
 
@@ -62,7 +61,7 @@ def load_and_validate_image(image_string):
         if image_pil.mode != 'RGB':
             image_pil = image_pil.convert('RGB')
             log.debug(f"Image converted to RGB mode")
-        log.info(f"Image loaded and validated successfully - Format: {image_pil.format}, Size: {image_pil.size}")
+        log.debug(f"Image loaded and validated successfully - Format: {image_pil.format}, Size: {image_pil.size}")
     except Exception as e:
         log.error(f"Image validation failed: {str(e)}")
         raise ValueError(f"Invalid or corrupted image data: {str(e)}")
@@ -85,13 +84,13 @@ def save_image_to_base64(image, format="PNG", optimize=True):
 
 def process_birefnet_image(processed_image):
     """Isolated scope for BiRefNet processing."""
-    log.info("Starting BiRefNet background removal processing")
+    log.debug("Starting BiRefNet background removal processing")
     with image_processing_scope():
-        processed_image = tform_to_tensor(processed_image).to(device)
-        result = birefnet_handler.process_imgs([processed_image])[0]
-        result = tform_to_pil(result)
-        log.info("BiRefNet background removal completed successfully")
-        return result
+        image = tform_to_tensor(processed_image).to(device)
+        image = birefnet_handler.process_imgs([image])[0]
+        image = tform_to_pil(image)
+        log.debug("BiRefNet background removal completed successfully")
+        return image
 
 def handler(job):
     """Handler function that will be used to process jobs."""
@@ -105,7 +104,7 @@ def handler(job):
         file_name = job["input"]["filename"]
         image_string = job["input"]["image_b64"]
         
-        log.info(f"Processing image: {file_name}")
+        log.debug(f"Processing image: {file_name}")
         
         # Load and validate image from base64
         image_pil = load_and_validate_image(image_string)

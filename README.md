@@ -6,12 +6,13 @@ A high-performance background removal service built for RunPod Serverless using 
 
 ## Features
 
-- **High-Quality Background Removal**: Uses BiRefNet General Lite model for superior results
-- **Memory Optimized**: Automatic image resizing and garbage collection for efficient processing
+- **High-Quality Background Removal**: Uses BiRefNet General model for superior results with custom implementation
+- **Memory Optimized**: Automatic garbage collection and context managers for efficient processing
 - **Multiple Format Support**: Supports JPEG, PNG, BMP, TIFF, and WEBP formats
 - **Comprehensive Logging**: Structured JSON logging with RunPod Logger for debugging and monitoring
 - **Error Handling**: Robust validation and error handling with detailed error messages
 - **Production Ready**: Built for RunPod Serverless with optimized Docker container
+- **Modular Architecture**: Clean separation of concerns with dedicated modules for BiRefNet processing and utilities
 
 ## API Reference
 
@@ -57,8 +58,11 @@ A high-performance background removal service built for RunPod Serverless using 
 ## Dependencies
 
 - **runpod**: Serverless framework with logging utilities
-- **rembg[gpu]**: Background removal with GPU acceleration
+- **transformers**: Hugging Face transformers library for BiRefNet model loading
 - **Pillow**: Image processing library
+- **einops**: Tensor operations for flexible array manipulations
+- **kornia**: Computer vision library for geometric transformations
+- **timm**: PyTorch image models library
 - **PyTorch**: Deep learning framework (via base image)
 
 ## Local Development
@@ -154,13 +158,14 @@ A high-performance background removal service built for RunPod Serverless using 
 ## Performance Optimization
 
 ### Image Processing
-- **Automatic Resizing**: Images larger than 1024px are automatically resized to prevent memory issues
 - **Memory Management**: Aggressive garbage collection and context managers for optimal memory usage
-- **Alpha Channel Handling**: Preserves original image quality by processing alpha channels separately when resizing is required
+- **Alpha Channel Handling**: Proper RGBA processing for transparent backgrounds
+- **Input Validation**: Comprehensive format and data validation before processing
 
 ### Model Optimization
 - **Pre-cached Model**: BiRefNet model is downloaded during Docker build for faster cold starts
 - **GPU Acceleration**: Optimized for CUDA with proper library path configuration
+- **Custom Implementation**: Direct model usage without intermediate libraries for maximum efficiency
 
 ## Logging and Monitoring
 
@@ -169,7 +174,7 @@ The service uses RunPod's structured JSON logging system with detailed informati
 
 - **Job Processing**: Start/end of jobs with job IDs and filenames
 - **Image Validation**: Format validation, size information, and processing steps
-- **Memory Management**: Resize operations and garbage collection events
+- **Memory Management**: Context managers and garbage collection events
 - **Error Handling**: Detailed error messages with context and error types
 - **Performance Metrics**: Processing pipeline steps and timing information
 
@@ -189,35 +194,39 @@ Monitor these logs in the RunPod console for:
 
 ### Architecture
 - **Base Image**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
-- **Model**: BiRefNet General Lite (optimized for speed/quality balance)
+- **Model**: BiRefNet General (ZhengPeng7/BiRefNet) loaded via transformers
 - **Processing Pipeline**: 
   1. Input validation and base64 decoding
-  2. Image format validation and loading
-  3. Memory-optimized preprocessing (resize if needed)
-  4. Background removal with BiRefNet
-  5. Alpha channel processing (if resizing was performed)
-  6. Base64 encoding and response
+  2. Image format validation and loading (auto-convert to RGB)
+  3. BiRefNet segmentation processing with proper transformations
+  4. Alpha channel composition for transparent backgrounds
+  5. Base64 encoding and response
+
+### Module Structure
+- **`handler.py`**: Main serverless handler with RunPod integration
+- **`modules/birefnet.py`**: Custom BiRefNet implementation and processing
+- **`modules/utils.py`**: Utility functions for tensor/image transformations
+- **`schemas.py`**: Input validation schema definitions
 
 ### Error Handling
 - **Input Validation**: Comprehensive base64 and image format validation
-- **Memory Protection**: Automatic cleanup on errors with garbage collection
+- **Memory Protection**: Context managers and automatic cleanup on errors
 - **Graceful Degradation**: Structured error responses with detailed messages
 - **Exception Handling**: Proper categorization of validation vs. system errors
 
 ### Memory Management
-- **Context Managers**: Isolated scopes for different processing stages
+- **Context Managers**: Isolated scopes for different processing stages with automatic cleanup
 - **Garbage Collection**: Automatic cleanup after processing and on errors
-- **Image Resizing**: Automatic downsizing of large images to prevent OOM errors
-- **Alpha Channel Optimization**: Efficient processing of transparency data
+- **GPU Memory**: Efficient tensor operations with proper device management
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Image Too Large**: The service automatically resizes images > 1024px
-2. **Unsupported Format**: Ensure image is JPEG, PNG, BMP, TIFF, or WEBP
-3. **Invalid Base64**: Verify base64 encoding is correct and complete
-4. **Memory Errors**: Service includes automatic garbage collection
+1. **Unsupported Format**: Ensure image is JPEG, PNG, BMP, TIFF, or WEBP
+2. **Invalid Base64**: Verify base64 encoding is correct and complete
+3. **Memory Errors**: Service includes automatic garbage collection and context management
+4. **GPU Issues**: Check CUDA availability and library paths
 
 ### Debugging
 
@@ -232,7 +241,7 @@ Check the structured logs for:
 - [RunPod Documentation](https://docs.runpod.io/serverless/overview)
 - [RunPod Handler Functions Guide](https://docs.runpod.io/serverless/workers/handler-functions)
 - [BiRefNet Paper](https://arxiv.org/abs/2401.15883)
-- [rembg Library](https://github.com/danielgatis/rembg)
+- [Transformers Library](https://huggingface.co/docs/transformers)
 - [RunPod Discord Community](https://discord.gg/cUpRmau42V)
 
 ## License

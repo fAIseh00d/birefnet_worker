@@ -50,18 +50,7 @@ class BirefnetHandler:
                 #transforms.Lambda(lambda x: x.clamp(min=0, max=1))
             ])
             mask = postprocess_mask(mask)
-            
-            # Add mask as alpha channel to image
-            # Convert mask to 4-channel RGBA format
-            if image.shape[0] == 3:  # RGB image
-                # Create alpha channel from mask and concatenate with RGB
-                # mask is already (1, H, W), so use it directly
-                image_with_alpha = torch.cat([image, mask], dim=0)  # Shape: (4, H, W)
-            else:
-                # Image already has alpha channel, replace it with new mask
-                image_with_alpha = torch.cat([image[:3], mask], dim=0)
-            
-            # Convert to PIL Image with alpha channel
-            out.append(image_with_alpha)
+            image = torch.cat([image[:3], mask], dim=0)
+            out.append(image)
             
         return out
