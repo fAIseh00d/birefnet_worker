@@ -7,10 +7,11 @@ from runpod.serverless.utils.rp_validator import validate
 import base64
 import io
 import gc
+import os
 from contextlib import contextmanager
 from PIL import Image
 
-from schemas import INPUT_SCHEMA
+from rp_schemas import INPUT_SCHEMA
 from modules.birefnet import BirefnetHandler
 from modules.utils import tform_to_pil, tform_to_tensor, device
 # Initialize RunPod logger for structured logging
@@ -19,7 +20,7 @@ log = RunPodLogger()
 # If your handler runs inference on a model, load the model here.
 # You will want models to be loaded into memory before starting serverless.
 log.info("Loading BiRefNet model session...")
-birefnet_handler = BirefnetHandler()
+birefnet_handler = BirefnetHandler(model_name=os.getenv('MODEL_TYPE', 'ZhengPeng7/BiRefNet_lite'))
 log.info("BiRefNet model session loaded successfully")
 
 @contextmanager

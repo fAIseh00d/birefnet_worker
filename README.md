@@ -1,17 +1,21 @@
+![BiRefNet Background Removal Service](/public/banner.jpg)
+
+---
+
 # BiRefNet Background Removal Service
 
 A high-performance background removal service built for RunPod Serverless using the BiRefNet model. This service automatically removes backgrounds from images using advanced AI technology optimized for production use.
 
-![RunPod](https://api.runpod.io/badge/runpod-workers/worker-template)
+[![Runpod](https://api.runpod.io/badge/fAIseh00d/birefnet_worker)](https://console.runpod.io/hub/fAIseh00d/birefnet_worker)
 
 ## Features
 
-- **High-Quality Background Removal**: Uses BiRefNet General model for superior results with custom implementation
+- **High-Quality Background Removal**: Uses BiRefNet models with configurable model selection (BiRefNet, BiRefNet_lite, BiRefNet_HR, BiRefNet_lite-2K)
 - **Memory Optimized**: Automatic garbage collection and context managers for efficient processing
 - **Multiple Format Support**: Supports JPEG, PNG, BMP, TIFF, and WEBP formats
 - **Comprehensive Logging**: Structured JSON logging with RunPod Logger for debugging and monitoring
 - **Error Handling**: Robust validation and error handling with detailed error messages
-- **Production Ready**: Built for RunPod Serverless with optimized Docker container
+- **Production Ready**: Built for RunPod Serverless with optimized Docker container and pre-cached models
 - **Modular Architecture**: Clean separation of concerns with dedicated modules for BiRefNet processing and utilities
 
 ## API Reference
@@ -100,19 +104,19 @@ A high-performance background removal service built for RunPod Serverless using 
 
 2. **Run the handler:**
    ```bash
-   python handler.py
+   python src/rp_handler.py
    ```
 
    This will process the image in `test_input.json` and output the result.
 
 3. **Test with custom input:**
    ```bash
-   python handler.py --test_input '{"input": {"filename": "test.jpg", "image_b64": "your_base64_image_data"}}'
+   python src/rp_handler.py --test_input '{"input": {"filename": "test.jpg", "image_b64": "your_base64_image_data"}}'
    ```
 
 4. **Run local test server:**
    ```bash
-   python handler.py --rp_serve_api
+   python src/rp_handler.py --rp_serve_api
    ```
    
    Then test with curl:
@@ -121,6 +125,8 @@ A high-performance background removal service built for RunPod Serverless using 
         -H "Content-Type: application/json" \
         -d '{"input": {"filename": "test.jpg", "image_b64": "your_base64_image_data"}}'
    ```
+
+   Note: The Docker container runs `python -u /app/rp_handler.py` by default with `MODEL_TYPE=ZhengPeng7/BiRefNet_lite`.
 
 ## Deployment
 
@@ -136,6 +142,11 @@ A high-performance background removal service built for RunPod Serverless using 
    - Set appropriate GPU resources (T4, RTX A4000, RTX 4090, etc.)
    - Configure scaling settings based on expected load
    - Set timeout values appropriately for image processing
+   - Set environment variable `MODEL_TYPE` to choose model variant:
+     - `ZhengPeng7/BiRefNet_lite` (default, fastest)
+     - `ZhengPeng7/BiRefNet` (balanced)
+     - `ZhengPeng7/BiRefNet_HR` (high resolution)
+     - `ZhengPeng7/BiRefNet_lite-2K` (optimized for 2K images)
 
 ### Option 2: Manual Docker Build
 
@@ -146,7 +157,7 @@ A high-performance background removal service built for RunPod Serverless using 
 
 2. **Test locally:**
    ```bash
-   docker run --gpus all -p 8080:8080 birefnet-worker
+   docker run --gpus all -p 8000:8000 birefnet-worker
    ```
 
 3. **Push to registry:**
@@ -163,9 +174,9 @@ A high-performance background removal service built for RunPod Serverless using 
 - **Input Validation**: Comprehensive format and data validation before processing
 
 ### Model Optimization
-- **Pre-cached Model**: BiRefNet model is downloaded during Docker build for faster cold starts
-- **GPU Acceleration**: Optimized for CUDA with proper library path configuration
-- **Custom Implementation**: Direct model usage without intermediate libraries for maximum efficiency
+- **Pre-cached Models**: All BiRefNet model variants are downloaded during Docker build for faster cold starts
+- **GPU Acceleration**: Optimized for CUDA with automatic device detection and tensor operations
+- **Custom Implementation**: BirefnetHandler class with optimized transformations and post-processing pipeline
 
 ## Logging and Monitoring
 
@@ -194,19 +205,19 @@ Monitor these logs in the RunPod console for:
 
 ### Architecture
 - **Base Image**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
-- **Model**: BiRefNet General (ZhengPeng7/BiRefNet) loaded via transformers
+- **Model**: Configurable BiRefNet models (default: ZhengPeng7/BiRefNet_lite) loaded via transformers
 - **Processing Pipeline**: 
   1. Input validation and base64 decoding
   2. Image format validation and loading (auto-convert to RGB)
-  3. BiRefNet segmentation processing with proper transformations
-  4. Alpha channel composition for transparent backgrounds
+  3. BiRefNet segmentation processing with 1024x1024 resizing and normalization
+  4. Post-processing with bilinear interpolation and alpha channel composition
   5. Base64 encoding and response
 
 ### Module Structure
-- **`handler.py`**: Main serverless handler with RunPod integration
-- **`modules/birefnet.py`**: Custom BiRefNet implementation and processing
-- **`modules/utils.py`**: Utility functions for tensor/image transformations
-- **`schemas.py`**: Input validation schema definitions
+- **`src/rp_handler.py`**: Main serverless handler with RunPod integration
+- **`src/modules/birefnet.py`**: Custom BiRefNet implementation with BirefnetHandler class
+- **`src/modules/utils.py`**: Utility functions for tensor/image transformations and device configuration
+- **`src/rp_schemas.py`**: Input validation schema definitions
 
 ### Error Handling
 - **Input Validation**: Comprehensive base64 and image format validation
@@ -240,7 +251,7 @@ Check the structured logs for:
 
 - [RunPod Documentation](https://docs.runpod.io/serverless/overview)
 - [RunPod Handler Functions Guide](https://docs.runpod.io/serverless/workers/handler-functions)
-- [BiRefNet Paper](https://arxiv.org/abs/2401.15883)
+- [BiRefNet Repo](https://github.com/ZhengPeng7/BiRefNet)
 - [Transformers Library](https://huggingface.co/docs/transformers)
 - [RunPod Discord Community](https://discord.gg/cUpRmau42V)
 
