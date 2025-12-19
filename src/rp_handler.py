@@ -11,6 +11,10 @@ import os
 from contextlib import contextmanager
 from PIL import Image
 import onnxruntime as ort
+
+# Suppress ONNX Runtime warnings (only show errors)
+ort.set_default_logger_severity(3)
+
 from rembg_onnx import remove, BiRefNetSessionONNX
 
 from rp_schemas import INPUT_SCHEMA

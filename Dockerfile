@@ -15,6 +15,10 @@ RUN mkdir -p models/BiRefNet_lite/onnx && \
     https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model_fp16.onnx
 
 COPY src/ ./
+RUN python -m compileall /app
+
+# Suppress NVIDIA CUDA banner in logs
+ENTRYPOINT []
+
 # Run the handler
-ENV MODEL_TYPE="BiRefNet_lite"
 CMD python3 -u /app/rp_handler.py
