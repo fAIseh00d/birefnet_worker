@@ -7,4 +7,14 @@ INPUT_SCHEMA = {
         'type': str,
         'required': True
     },
+    # Return only the mask instead of cutout
+    'only_mask': {
+        'type': bool,
+        'required': False
+    },
+    # Background color as [R, G, B, A] (0-255 each)
+    'bgcolor': {
+        'type': list,
+        'required': False
+    },
 }

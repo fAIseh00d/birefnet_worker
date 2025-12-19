@@ -1,4 +1,4 @@
-"""BiRefNet Background Removal Handler with proper logging."""
+"""BiRefNet Background Removal Handler."""
 
 import runpod
 from runpod.serverless.modules.rp_logger import RunPodLogger
@@ -10,18 +10,29 @@ import gc
 import os
 from contextlib import contextmanager
 from PIL import Image
+import onnxruntime as ort
+from rembg_onnx import remove, BiRefNetSessionONNX
 
 from rp_schemas import INPUT_SCHEMA
-from modules.birefnet import BirefnetHandler
-from modules.utils import tform_to_pil, tform_to_tensor, device
+
 # Initialize RunPod logger for structured logging
 log = RunPodLogger()
 
-# If your handler runs inference on a model, load the model here.
-# You will want models to be loaded into memory before starting serverless.
+# Configure session options
+sess_opts = ort.SessionOptions()
+sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+if "OMP_NUM_THREADS" in os.environ:
+    threads = int(os.environ["OMP_NUM_THREADS"])
+    sess_opts.inter_op_num_threads = threads
+    sess_opts.intra_op_num_threads = threads
+
+# Load BiRefNet model
 log.info("Loading BiRefNet model session...")
-birefnet_handler = BirefnetHandler(model_name=os.getenv('MODEL_TYPE', 'ZhengPeng7/BiRefNet_lite'))
+birefnet_model_path = os.getenv("BIREFNET_MODEL_PATH", "models/BiRefNet_lite/onnx/model_fp16.onnx")
+birefnet_session = BiRefNetSessionONNX(birefnet_model_path, sess_opts)
 log.info("BiRefNet model session loaded successfully")
+
 
 @contextmanager
 def image_processing_scope():
@@ -31,7 +42,8 @@ def image_processing_scope():
         yield
     finally:
         log.debug("Cleaning up image processing scope")
-        gc.collect()  # Clean up when exiting scope
+        gc.collect()
+
 
 def load_and_validate_image(image_string):
     """Load and validate image from base64 string."""
@@ -54,14 +66,14 @@ def load_and_validate_image(image_string):
     try:
         image_pil = Image.open(io.BytesIO(image_bytes))
         # Verify image can be loaded by accessing its properties
-        _ = image_pil.size  # This will raise an exception if image is corrupted
-        image_pil.verify()  # Additional verification
+        _ = image_pil.size
+        image_pil.verify()
         # Reopen image since verify() closes it
         image_pil = Image.open(io.BytesIO(image_bytes))
         # Convert to RGB if not already
         if image_pil.mode != 'RGB':
             image_pil = image_pil.convert('RGB')
-            log.debug(f"Image converted to RGB mode")
+            log.debug("Image converted to RGB mode")
         log.debug(f"Image loaded and validated successfully - Format: {image_pil.format}, Size: {image_pil.size}")
     except Exception as e:
         log.error(f"Image validation failed: {str(e)}")
@@ -74,6 +86,7 @@ def load_and_validate_image(image_string):
     
     return image_pil
 
+
 def save_image_to_base64(image, format="PNG", optimize=True):
     """Save PIL image to base64 string."""
     log.debug(f"Converting image to base64 - Format: {format}, Optimize: {optimize}")
@@ -83,35 +96,47 @@ def save_image_to_base64(image, format="PNG", optimize=True):
     log.debug(f"Image converted to base64 successfully - Size: {len(image_base64)} characters")
     return image_base64
 
-def process_birefnet_image(processed_image):
-    """Isolated scope for BiRefNet processing."""
-    log.debug("Starting BiRefNet background removal processing")
+
+def process_image(image, options):
+    """Process image with BiRefNet."""
+    log.debug("Starting background removal processing")
     with image_processing_scope():
-        image = tform_to_tensor(processed_image).to(device)
-        image = birefnet_handler.process_imgs([image])[0]
-        image = tform_to_pil(image)
-        log.debug("BiRefNet background removal completed successfully")
-        return image
+        result = remove(
+            image,
+            session=birefnet_session,
+            only_mask=options.get("only_mask", False),
+            bgcolor=tuple(options["bgcolor"]) if options.get("bgcolor") else None,
+        )
+        log.debug("Background removal completed successfully")
+        return result
+
 
 def handler(job):
     """Handler function that will be used to process jobs."""
     job_id = job.get("id", "unknown")
-    log.info(f"Starting BiRefNet background removal job - Job ID: {job_id}")
+    log.info(f"Starting background removal job - Job ID: {job_id}")
     
     try:
         validate(job, INPUT_SCHEMA)
         log.debug("Job input validation passed")
 
-        file_name = job["input"]["filename"]
-        image_string = job["input"]["image_b64"]
+        job_input = job["input"]
+        file_name = job_input["filename"]
+        image_string = job_input["image_b64"]
         
-        log.debug(f"Processing image: {file_name}")
+        # Extract processing options
+        options = {
+            "only_mask": job_input.get("only_mask", False),
+            "bgcolor": job_input.get("bgcolor"),
+        }
+        
+        log.debug(f"Processing image: {file_name}, options: {options}")
         
         # Load and validate image from base64
         image_pil = load_and_validate_image(image_string)
         
-        # Main processing in isolated scopes
-        final_image = process_birefnet_image(image_pil)
+        # Main processing
+        final_image = process_image(image_pil, options)
         
         # Convert final image to base64
         image_base64 = save_image_to_base64(final_image)
@@ -121,15 +146,12 @@ def handler(job):
         return {"filename": file_name, "image_b64": image_base64}
     
     except ValueError as ve:
-        # Handle validation errors specifically
         log.error(f"Validation error in job {job_id}: {str(ve)}")
         gc.collect()
         return {"error": f"Validation Error: {str(ve)}"}
     
     except Exception as e:
-        # Handle unexpected errors
         log.error(f"Unexpected error in job {job_id} ({type(e).__name__}): {str(e)}")
-        # Force garbage collection on error
         gc.collect()
         raise e
 

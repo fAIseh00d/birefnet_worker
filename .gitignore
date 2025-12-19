@@ -160,4 +160,5 @@ cython_debug/
 #.idea/
 .python-version
 models/
-.runpod_jobs.pkl 
+.runpod_jobs*
+.vscode
