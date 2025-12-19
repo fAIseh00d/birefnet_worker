@@ -1,0 +1,3 @@
+[submodule "submodules/deform_conv2d_onnx_exporter"]
+	path = submodules/deform_conv2d_onnx_exporter
+	url = https://github.com/masamitsu-murase/deform_conv2d_onnx_exporter.git

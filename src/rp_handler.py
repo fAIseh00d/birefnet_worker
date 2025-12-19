@@ -15,9 +15,11 @@ import onnxruntime as ort
 # Suppress ONNX Runtime warnings (only show errors)
 ort.set_default_logger_severity(3)
 
-from rembg_onnx import remove, BiRefNetSessionONNX
+from rembg_onnx import remove, BiRefNetSessionONNX, MODEL_CONFIGS
 
 from rp_schemas import INPUT_SCHEMA
+
+model_dict = {model: f"models/{model}.onnx" for model in MODEL_CONFIGS.keys()}
 
 # Initialize RunPod logger for structured logging
 log = RunPodLogger()
@@ -33,7 +35,7 @@ if "OMP_NUM_THREADS" in os.environ:
 
 # Load BiRefNet model
 log.info("Loading BiRefNet model session...")
-birefnet_model_path = os.getenv("BIREFNET_MODEL_PATH", "models/BiRefNet_lite/onnx/model_fp16.onnx")
+birefnet_model_path = model_dict[os.getenv("MODEL_TYPE", "lite")]
 birefnet_session = BiRefNetSessionONNX(birefnet_model_path, sess_opts)
 log.info("BiRefNet model session loaded successfully")
 

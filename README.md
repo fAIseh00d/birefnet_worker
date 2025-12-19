@@ -13,6 +13,16 @@ A fast, GPU-accelerated background removal service using BiRefNet neural network
 
 ## Quick Start
 
+### Model conversion
+
+Before baking the docker image, please run conversion script.
+
+```bash
+python export_birefnet_onnx.py --model lite-2k --output models/lite_2k.onnx
+
+python export_birefnet_onnx.py --model lite-2k --output models/lite_2k.onnx
+```
+
 ### Local Testing
 
 ```bash
